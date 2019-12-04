@@ -1,6 +1,11 @@
 <resources>
-    <string name="app_name">DetectNoiseAndroidExample</string>
+    <string name="app_name">Noise Detector</string>
     <string name="stopped">stopped...</string>
     <string name="noise_detector">Noise Detector</string>
+    <string name="record">Record</string>
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+    <string name="view">View</string>
+    <string name="noise_data">Noise Data</string>
 
 </resources>
