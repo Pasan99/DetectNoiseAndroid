@@ -47,7 +47,7 @@
             android:layout_height="300dp"
             android:layout_gravity="center_horizontal"
             android:layout_marginBottom="32dp"
-            android:max="110"
+            android:max="150"
             app:back_color="@android:color/darker_gray"
             app:back_width="10dp"
             app:front_width="10dp"
@@ -57,7 +57,7 @@
             app:is_need_content="true"
             app:is_need_dial="true"
             app:is_need_unit="true"
-            app:max_value="25"
+            app:max_value="150"
             app:string_unit="db"
             app:total_engle="360" />
 

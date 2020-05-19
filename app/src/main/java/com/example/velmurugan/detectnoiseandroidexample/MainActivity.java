@@ -6,8 +6,11 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.location.Criteria;
 import android.location.Location;
+import android.location.LocationListener;
 import android.location.LocationManager;
+import android.location.LocationProvider;
 import android.os.Build;
 import android.os.Handler;
 import android.os.PowerManager;
@@ -41,15 +44,19 @@ import java.util.Timer;
 import java.util.TimerTask;
 
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements LocationListener {
     /* constants */
     private static final int POLL_INTERVAL = 300;
     private static final String NOISE_ALERT = "NoiseAlert:";
 
-    /** running state **/
+    /**
+     * running state
+     **/
     private boolean mRunning = false;
 
-    /** config state **/
+    /**
+     * config state
+     **/
     private int mThreshold;
 
     int RECORD_AUDIO = 0;
@@ -79,6 +86,8 @@ public class MainActivity extends AppCompatActivity {
     private DetectNoise mSensor;
     ColorArcProgressBar bar;
 
+    private LocationManager locationManager;
+
 
     /****************** Define runnable thread again and again detect noise *********/
     private Runnable mSleepTask = new Runnable() {
@@ -104,7 +113,9 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
-    /** Called when the activity is first created. */
+    /**
+     * Called when the activity is first created.
+     */
     @SuppressLint("InvalidWakeLockTag")
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -205,44 +216,31 @@ public class MainActivity extends AppCompatActivity {
         return String.valueOf(date);
     }
 
+
     @RequiresApi(api = Build.VERSION_CODES.M)
     private void getLocation() {
-        LocationManager lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
-        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 1);
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
+                checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 1);
             return;
         }
-        assert lm != null;
-        Location location = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+        locationManager = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
+        Criteria criteria = new Criteria();
+        String bestProvider = String.valueOf(locationManager.getBestProvider(criteria, true)).toString();
 
-        assert location != null;
-        mLongitude = location.getLongitude();
-        mLatitude = location.getLatitude();
-
-        saveData();
-
-//        final LocationListener locationListener = new LocationListener() {
-//            public void onLocationChanged(Location location) {
-//                mLongitude = location.getLongitude();
-//                mLatitude = location.getLatitude();
-//            }
-//
-//            @Override
-//            public void onStatusChanged(String provider, int status, Bundle extras) {
-//
-//            }
-//
-//            @Override
-//            public void onProviderEnabled(String provider) {
-//
-//            }
-//
-//            @Override
-//            public void onProviderDisabled(String provider) {
-//
-//            }
-//        };
+        //You can still do this if you like, you might get lucky:
+        Location location = locationManager.getLastKnownLocation(bestProvider);
+        if (location != null) {
+            Log.e("TAG", "GPS is on");
+            mLatitude = location.getLatitude();
+            mLongitude = location.getLongitude();
+            saveData();
+        } else {
+            //This is what you need:
+            locationManager.requestLocationUpdates(bestProvider, 1000, 0, this);
+        }
     }
+
 
     private void startTimer() {
         mTimer = new Timer();
@@ -325,6 +323,7 @@ public class MainActivity extends AppCompatActivity {
 
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.RECORD_AUDIO},
                     RECORD_AUDIO);
+            return;
         }
 
         //Log.i("Noise", "==== start ===");
@@ -338,6 +337,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void stop() {
+        if (mWakeLock != null)
         Log.d("Noise", "==== Stop Noise Monitoring===");
         if (mWakeLock.isHeld()) {
             mWakeLock.release();
@@ -354,7 +354,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void initializeApplicationConstants() {
         // Set Noise Threshold
-        mThreshold = 13;
+        mThreshold = 90;
 
     }
 
@@ -362,14 +362,14 @@ public class MainActivity extends AppCompatActivity {
     private void updateDisplay(String status, double signalEMA) {
         if (!isRecording) {
             mStatusView.setText(status);
-            if (signalEMA > -14) {
+            if (signalEMA > 0) {
                 mListOfNoises.add(signalEMA);
             }
         } else {
             mStatusView.setText("Recording...");
         }
         //
-        if (signalEMA < 1) {
+        if (signalEMA < 40) {
             mNoiseStatus.setText("Good");
             mNoiseStatus.setTextColor(Color.GREEN);
         } else {
@@ -409,6 +409,7 @@ public class MainActivity extends AppCompatActivity {
         tv_noice.setText(signalEMA + "dB");
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.M)
     public void onRequestPermissionsResult(int requestCode, @NonNull String permissions[], @NonNull int[] grantResults) {
         if (requestCode == 1) {// If request is cancelled, the result arrays are empty.
             if (grantResults.length > 0
@@ -420,17 +421,39 @@ public class MainActivity extends AppCompatActivity {
                         return;
                     }
                 }
-                Location location = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-
-                assert location != null;
-                mLongitude = location.getLongitude();
-                mLatitude = location.getLatitude();
-
-                saveData();
+                getLocation();
             }
             // other 'case' lines to check for other
             // permissions this app might request
         }
+
+        if (requestCode == RECORD_AUDIO) {// If request is cancelled, the result arrays are empty.
+            start();
+        }
     }
 
+    @Override
+    public void onLocationChanged(Location location) {
+        //remove location callback:
+        locationManager.removeUpdates(this);
+
+        //open the map:
+        mLatitude = location.getLatitude();
+        mLongitude = location.getLongitude();
+    }
+
+    @Override
+    public void onStatusChanged(String provider, int status, Bundle extras) {
+
+    }
+
+    @Override
+    public void onProviderEnabled(String provider) {
+
+    }
+
+    @Override
+    public void onProviderDisabled(String provider) {
+
+    }
 }

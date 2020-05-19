@@ -56,10 +56,10 @@ public class ItemNoise {
     }
 
     public String getStatus(){
-        if (Double.valueOf(db_count) < 2){
+        if (Double.valueOf(db_count) < 40){
             return "Good";
         }
-        if (Double.valueOf(db_count) > 14){
+        if (Double.valueOf(db_count) > 90){
             return "Noisy";
         }
         return "Normal";
